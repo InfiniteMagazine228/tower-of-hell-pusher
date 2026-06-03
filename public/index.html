@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Tower of Hell Offline Enhanced</title>
+  <title>Tower of Hell Offline Models</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -26,20 +26,26 @@
           <option value="hard">Hard</option>
         </select>
       </label>
+      <label> Sensitivity
+        <input id="sensitivity" type="range" min="0.5" max="4" step="0.1" value="1.0" />
+      </label>
       <button id="startBtn">Start Level</button>
       <button id="resetBtn">Reset</button>
       <span id="timer">03:00</span>
+      <span id="score" class="small">Score: 0</span>
     </div>
     <div id="players"></div>
     <div id="leaderboard">
       <h4>Leaderboard</h4>
       <ol id="leaderList"></ol>
     </div>
+    <div id="hint" class="small">Click game view to lock mouse. WASD to move, Space to jump.</div>
   </div>
 
   <div id="game"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/loaders/GLTFLoader.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
