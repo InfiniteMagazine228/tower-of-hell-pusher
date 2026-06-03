@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Tower of Hell - Pusher Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="ui">
+    <div id="topbar">
+      <input id="name" placeholder="Your name" />
+      <button id="create">Create Room</button>
+      <input id="roomId" placeholder="Room ID" />
+      <button id="join">Join Room</button>
+      <button id="start">Start Level (host)</button>
+      <span id="timer">--:--</span>
+    </div>
+    <div id="players"></div>
+  </div>
+  <div id="game"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
+  <script src="https://js.pusher.com/8.2/pusher.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
