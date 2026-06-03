@@ -2,26 +2,44 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Tower of Hell Socket.io Demo</title>
+  <title>Tower of Hell Offline Enhanced</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="ui">
     <div id="topbar">
-      <input id="name" placeholder="Your name" />
-      <button id="create">Create Room</button>
-      <input id="roomId" placeholder="Room ID" />
-      <button id="join">Join Room</button>
-      <button id="start">Start Level (host)</button>
-      <span id="timer">--:--</span>
+      <input id="name" placeholder="Your name" value="Player" />
+      <label> Bots
+        <select id="botCount">
+          <option value="0">0</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="4">4</option>
+          <option value="8">8</option>
+        </select>
+      </label>
+      <label> Difficulty
+        <select id="difficulty">
+          <option value="easy">Easy</option>
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Hard</option>
+        </select>
+      </label>
+      <button id="startBtn">Start Level</button>
+      <button id="resetBtn">Reset</button>
+      <span id="timer">03:00</span>
     </div>
     <div id="players"></div>
+    <div id="leaderboard">
+      <h4>Leaderboard</h4>
+      <ol id="leaderList"></ol>
+    </div>
   </div>
+
   <div id="game"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
