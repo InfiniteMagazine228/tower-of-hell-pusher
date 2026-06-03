@@ -1,12 +1,71 @@
+// public/game.js
+// BEFORE RUN: set SERVER_URL to your server (e.g., http://localhost:5000)
+const SERVER_URL = window.SERVER_URL || 'http://localhost:5000';
+
+let socket;
 let scene, camera, renderer, clock;
 let localPlayerId = generateId();
 let localPlayer = { id: localPlayerId, x:0, y:5, z:0, vx:0, vy:0, vz:0 };
-const otherPlayers = {};
+const otherPlayers = {}; // id -> {mesh, target, name}
 let roomId = null;
 let seed = null;
 let timeLeft = 0;
 let keys = { w:0, a:0, s:0, d:0, space:0 };
 
+function connectSocket() {
+  if (socket && socket.connected) return;
+  socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+
+  socket.on('connect', () => {
+    console.log('connected to server', socket.id);
+  });
+
+  socket.on('playerJoined', data => {
+    addPlayerMesh(data.playerId, data.name);
+    refreshPlayersUI();
+  });
+
+  socket.on('playerLeft', data => {
+    removePlayerMesh(data.playerId);
+    refreshPlayersUI();
+  });
+
+  socket.on('levelStart', data => {
+    seed = data.seed;
+    timeLeft = data.duration;
+    clearScenePlatforms();
+    generateTower();
+    document.getElementById('timer').textContent = formatTime(timeLeft);
+  });
+
+  socket.on('stateUpdate', data => {
+    timeLeft = data.timeLeft;
+    document.getElementById('timer').textContent = formatTime(timeLeft);
+    data.players.forEach(p => {
+      if (p.id === localPlayerId) return;
+      if (!otherPlayers[p.id]) addPlayerMesh(p.id, p.name || 'Player');
+      otherPlayers[p.id].target = { x:p.x, y:p.y, z:p.z, finished:p.finished };
+    });
+    refreshPlayersUI();
+  });
+
+  socket.on('playerUpdate', data => {
+    if (data.playerId === localPlayerId) return;
+    if (!otherPlayers[data.playerId]) addPlayerMesh(data.playerId, 'Player');
+    otherPlayers[data.playerId].target = { x:data.x, y:data.y, z:data.z, finished:data.finished };
+  });
+
+  socket.on('playerFinish', data => {
+    const id = data.playerId;
+    if (otherPlayers[id]) otherPlayers[id].mesh.material.color.set(0xffff00);
+  });
+
+  socket.on('levelEnd', data => {
+    alert('Level ended');
+  });
+}
+
+// Three.js init
 function initThree() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
@@ -105,11 +164,7 @@ function sendInput(input) {
   const now = performance.now();
   if (now - lastInputSent < 80) return;
   lastInputSent = now;
-  fetch(`${SERVER_URL}/input`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ roomId, playerId: localPlayerId, input })
-  }).catch(e=>console.warn('input send err', e));
+  socket.emit('input', { roomId, playerId: localPlayerId, input });
 }
 
 function updateCamera() {
@@ -121,78 +176,6 @@ function updateCamera() {
 
 function generateId() {
   return 'p-' + Math.random().toString(36).slice(2,9);
-}
-
-// Pusher presence setup
-let pusher, channel;
-function setupPusher() {
-  Pusher.logToConsole = false;
-  pusher = new Pusher(PUSHER_KEY, {
-    cluster: PUSHER_CLUSTER,
-    authEndpoint: `${SERVER_URL}/pusher/auth`,
-    auth: {
-      params: { playerId: localPlayerId, name: (document.getElementById('name')||{}).value || 'Player' }
-    }
-  });
-}
-
-function subscribeRoom(rid) {
-  if (channel) {
-    try { channel.unbind_all(); pusher.unsubscribe(channel.name); } catch(e){}
-  }
-  const chName = `presence-room-${rid}`;
-  channel = pusher.subscribe(chName);
-
-  channel.bind('pusher:subscription_succeeded', (members) => {
-    members.each(member => {
-      if (member.id !== localPlayerId) addPlayerMesh(member.id, member.info.name || 'Player');
-    });
-    refreshPlayersUI();
-  });
-
-  channel.bind('pusher:member_added', (member) => {
-    if (member.id !== localPlayerId) addPlayerMesh(member.id, member.info.name || 'Player');
-    refreshPlayersUI();
-  });
-
-  channel.bind('pusher:member_removed', (member) => {
-    removePlayerMesh(member.id);
-    refreshPlayersUI();
-  });
-
-  channel.bind('levelStart', data => {
-    seed = data.seed;
-    timeLeft = data.duration;
-    clearScenePlatforms();
-    generateTower();
-    document.getElementById('timer').textContent = formatTime(timeLeft);
-  });
-
-  channel.bind('stateUpdate', data => {
-    timeLeft = data.timeLeft;
-    document.getElementById('timer').textContent = formatTime(timeLeft);
-    data.players.forEach(p => {
-      if (p.id === localPlayerId) return;
-      if (!otherPlayers[p.id]) addPlayerMesh(p.id, p.name || 'Player');
-      otherPlayers[p.id].target = { x:p.x, y:p.y, z:p.z, finished:p.finished };
-    });
-    refreshPlayersUI();
-  });
-
-  channel.bind('playerUpdate', data => {
-    if (data.playerId === localPlayerId) return;
-    if (!otherPlayers[data.playerId]) addPlayerMesh(data.playerId, 'Player');
-    otherPlayers[data.playerId].target = { x:data.x, y:data.y, z:data.z, finished:data.finished };
-  });
-
-  channel.bind('playerFinish', data => {
-    const id = data.playerId;
-    if (otherPlayers[id]) otherPlayers[id].mesh.material.color.set(0xffff00);
-  });
-
-  channel.bind('levelEnd', data => {
-    alert('Level ended');
-  });
 }
 
 function addPlayerMesh(id, name) {
@@ -262,42 +245,38 @@ window.addEventListener('keyup', e => {
 
 // UI buttons
 document.getElementById('create').addEventListener('click', async () => {
-  const res = await fetch(`${SERVER_URL}/create-room`, { method:'POST' }).then(r=>r.json());
-  roomId = res.roomId;
-  seed = res.seed;
-  document.getElementById('roomId').value = roomId;
-  setupPusher();
-  subscribeRoom(roomId);
-  const name = document.getElementById('name').value || 'Host';
-  await fetch(`${SERVER_URL}/join-room`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ roomId, playerId: localPlayerId, name })
+  connectSocket();
+  socket.emit('createRoom', (res) => {
+    roomId = res.roomId;
+    seed = res.seed;
+    document.getElementById('roomId').value = roomId;
+    // auto-join
+    const name = document.getElementById('name').value || 'Host';
+    socket.emit('joinRoom', { roomId, playerId: localPlayerId, name }, (r) => {
+      if (!r.ok) return alert(r.error || 'Join failed');
+      addPlayerMesh(localPlayerId, name);
+      refreshPlayersUI();
+    });
   });
-  addPlayerMesh(localPlayerId, name);
-  refreshPlayersUI();
 });
 
 document.getElementById('join').addEventListener('click', async () => {
+  connectSocket();
   roomId = document.getElementById('roomId').value.trim();
   if (!roomId) return alert('Enter room id');
-  setupPusher();
-  subscribeRoom(roomId);
   const name = document.getElementById('name').value || 'Player';
-  const res = await fetch(`${SERVER_URL}/join-room`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ roomId, playerId: localPlayerId, name })
-  }).then(r=>r.json());
-  if (res.error) return alert(res.error);
-  seed = res.seed;
-  addPlayerMesh(localPlayerId, name);
-  refreshPlayersUI();
+  socket.emit('joinRoom', { roomId, playerId: localPlayerId, name }, (r) => {
+    if (!r.ok) return alert(r.error || 'Join failed');
+    seed = r.seed;
+    addPlayerMesh(localPlayerId, name);
+    refreshPlayersUI();
+  });
 });
 
 document.getElementById('start').addEventListener('click', async () => {
   if (!roomId) return alert('No room');
-  await fetch(`${SERVER_URL}/start-level`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ roomId, duration: 180 })
+  socket.emit('startLevel', { roomId, duration: 180 }, (r) => {
+    if (!r.ok) alert(r.error || 'Start failed');
   });
 });
 
@@ -309,8 +288,6 @@ function formatTime(sec) {
 }
 
 (function main(){
-  if (PUSHER_KEY === 'REPLACE_WITH_YOUR_PUSHER_KEY') {
-    console.warn('Replace PUSHER_KEY and SERVER_URL in game.js before deploying.');
-  }
   initThree();
+  // socket will connect on first create/join
 })();
